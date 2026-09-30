@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="mn">
+<head>
+  <meta charset="UTF-8">
+  <title>Малчны бүртгэл</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
+  <style>
+    body {
+      font-family: "Segoe UI", sans-serif;
+      background-color: #f8fafc;
+      padding: 20px;
+      margin: 0;
+      color: #1e293b;
+    }
+
+    .container {
+      max-width: 720px;
+      margin: auto;
+      background: #ffffff;
+      padding: 24px;
+      border-radius: 16px;
+      border: 1px solid #e2e8f0;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+    }
+
+    button:disabled {
+      background-color: #cbd5e1 !important;
+      color: #ffffff;
+      cursor: not-allowed;
+      border: none;
+    }
+
+    h2 {
+      text-align: center;
+      margin-bottom: 20px;
+      color: #4f6e91;
+    }
+
+    input, button {
+      width: 100%;
+      padding: 12px;
+      margin: 10px 0;
+      border-radius: 8px;
+      border: 1px solid #e2e8f0;
+      font-size: 16px;
+      box-sizing: border-box;
+    }
+
+    button {
+      background-color: #4f6e91;
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background-color: #3b516e;
+    }
+
+    /* ---- Горим сонгох дэлгэц ---- */
+    #modeScreen p {
+      text-align: center;
+      color: #475569;
+      margin: 0 0 10px;
+    }
+
+    .mode-btn {
+      padding: 18px;
+      font-size: 18px;
+    }
+
+    .mode-btn small {
+      display: block;
+      font-weight: normal;
+      font-size: 14px;
+      opacity: 0.85;
+      margin-top: 4px;
+    }
+
+    #mainForm {
+      display: none;
+    }
+
+    .mode-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      background: #eef2f7;
+      padding: 10px 14px;
+      border-radius: 8px;
+      margin-bottom: 6px;
+      font-size: 15px;
+    }
+
+    .mode-bar button {
+      width: auto;
+      margin: 0;
+      padding: 8px 14px;
+      font-size: 14px;
+      background-color: #64748b;
+      white-space: nowrap;
+    }
+
+    .mode-bar button:hover {
+      background-color: #475569;
+    }
+
+    #resultArea {
+      display: none;
+      margin-top: 30px;
+    }
+
+    .print-container {
+      display: block;
+    }
+
+    .receipt {
+      border: 1px solid #e2e8f0;
+      padding: 16px;
+      margin-bottom: 40px;
+      box-sizing: border-box;
+      page-break-inside: avoid;
+    }
+
+    .title-area {
+      text-align: center;
+      margin-bottom: 10px;
+    }
+
+    .subtitle {
+      font-size: 14px;
+      color: gray;
+    }
+
+    .nowrap {
+      white-space: nowrap;
+    }
+
+    @media print {
+      input, button, h2, #modeScreen, .mode-bar, #weightStats {
+        display: none !important;
+      }
+
+      body {
+        background: white;
+        margin: 0;
+      }
+
+      .container {
+        padding: 0;
+        box-shadow: none;
+        border: none;
+        max-width: 100%;
+      }
+
+      .print-container {
+        display: block;
+      }
+
+      .receipt {
+        padding: 16px;
+        box-sizing: border-box;
+        border: none;
+        page-break-inside: avoid;
+      }
+
+      @page {
+        margin: 5mm;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>Адууны бүртгэлийн систем</h2>
+
+    <!-- 1. Эхлээд бодох аргаа сонгоно -->
+    <div id="modeScreen">
+      <p>Өнөөдөр ямар ангиллаар бодох вэ?</p>
+      <button class="mode-btn" onclick="selectMode(2)">
+        2 ангилал
+        <small>100 кг-аас доош / 100 кг-аас дээш</small>
+      </button>
+      <button class="mode-btn" onclick="selectMode(3)">
+        3 ангилал
+        <small>100 кг-аас доош / 101–160 кг / 160 кг-аас дээш</small>
+      </button>
+    </div>
+
+    <!-- 2. Үндсэн бүртгэлийн хэсэг -->
+    <div id="mainForm">
+      <div class="mode-bar">
+        <span>Бодох арга: <strong id="modeLabel"></strong></span>
+        <button onclick="changeMode()">Солих</button>
+      </div>
+
+      <input type="date" id="date" placeholder="Огноо" class="tabable-input">
+      <input type="text" id="herder" placeholder="Малчны нэр" class="tabable-input">
+      <input type="text" id="account" placeholder="Дансны дугаар" class="tabable-input">
+      <input type="text" id="phone" placeholder="Утасны дугаар" class="tabable-input">
+      <input type="number" id="horseCount" placeholder="Адууны тоо" class="tabable-input">
+      <button onclick="generateWeightFields()">Жингийн талбарууд</button>
+      <div id="weightFields"></div>
+
+      <!-- Үнийн талбарууд сонгосон горимоос хамаарч энд үүснэ -->
+      <div id="priceFields"></div>
+
+      <button id="calculateBtn" onclick="generateReceipt()" disabled>Бодох</button>
+      <button onclick="window.print()">Хэвлэж гаргах</button>
+      <button onclick="resetForm()">Арилгах</button>
+
+      <div id="weightStats" style="margin-top: 20px; font-weight: bold;"></div>
+      <div id="resultArea"></div>
+      <div id="historyArea" style="margin-top: 30px;"></div>
+    </div>
+  </div>
+
+  <script>
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzZLrgxLyLcSv6Du2xYF4XgWEkUd5M7LokN6KSVVhuI3TWEsu73NW7hPzM_7rLPqnBz/exec";
+
+    // Жингийн ангиллууд. Хил хязгаарыг энд л өөрчлөхөд хангалттай.
+    const CATEGORY_SETS = {
+      2: [
+        { key: 'under',   name: '100 кг-аас доош', test: w => w < 101 },
+        { key: 'over',    name: '100 кг-аас дээш', test: w => w >= 101 }
+      ],
+      3: [
+        { key: 'under',   name: '100 кг-аас доош', test: w => w < 101 },
+        { key: 'mid',     name: '101–160 кг',      test: w => w >= 101 && w <= 160 },
+        { key: 'over160', name: '160 кг-аас дээш', test: w => w > 160 }
+      ]
+    };
+
+    let currentMode = null;
+
+    function categories() {
+      return CATEGORY_SETS[currentMode] || [];
+    }
+
+    // ---------- Горим сонгох ----------
+    function selectMode(mode) {
+      currentMode = mode;
+      document.getElementById('modeLabel').innerText = `${mode} ангилал`;
+      document.getElementById('modeScreen').style.display = 'none';
+      document.getElementById('mainForm').style.display = 'block';
+      buildPriceFields();
+      resetForm();
+      document.getElementById('herder').focus();
+    }
+
+    function changeMode() {
+      const hasData = ['herder', 'account', 'phone', 'horseCount']
+        .some(id => document.getElementById(id).value.trim() !== '');
+      if (hasData && !confirm('Оруулсан мэдээлэл арилна. Бодох аргаа солих уу?')) return;
+
+      currentMode = null;
+      resetForm();
+      document.getElementById('mainForm').style.display = 'none';
+      document.getElementById('modeScreen').style.display = 'block';
+    }
+
+    // Сонгосон горимд тохирох үнийн талбаруудыг үүсгэх
+    function buildPriceFields() {
+      const container = document.getElementById('priceFields');
+      container.innerHTML = '';
+      categories().forEach(cat => {
+        const wrap = document.createElement('div');
+        wrap.id = `priceWrap-${cat.key}`;
+        wrap.style.display = 'none';
+
+        const input = document.createElement('input');
+        input.type = 'number';
+        input.id = `price-${cat.key}`;
+        input.className = 'tabable-input';
+        input.placeholder = `1 кг-ийн үнэ (${cat.name})`;
+        input.addEventListener('input', validateForm);
+
+        wrap.appendChild(input);
+        container.appendChild(wrap);
+      });
+      setupInputNavigation();
+    }
+
+    // ---------- Туслах функцууд ----------
+    function getWeights() {
+      return Array.from(document.getElementsByClassName('horseWeight'))
+        .map(el => parseFloat(el.value))
+        .filter(w => !isNaN(w));
+    }
+
+    function groupWeights(weights) {
+      return categories().map(cat => {
+        const list = weights.filter(cat.test);
+        return {
+          cat,
+          list,
+          count: list.length,
+          total: list.reduce((a, b) => a + b, 0)
+        };
+      });
+    }
+
+    function todayStr() {
+      return new Date().toISOString().split('T')[0];
+    }
+
+    // Жин оруулахад: үнийн талбар харуулах/нуух, статистик шинэчлэх
+    function updateCategoryView() {
+      const groups = groupWeights(getWeights());
+      groups.forEach(g => {
+        const wrap = document.getElementById(`priceWrap-${g.cat.key}`);
+        if (wrap) wrap.style.display = g.count > 0 ? 'block' : 'none';
+      });
+
+      document.getElementById('weightStats').innerText = groups.length
+        ? groups.map(g => `${g.cat.name}: ${g.count}`).join(' | ')
+        : '';
+
+      validateForm();
+    }
+
+    // ---------- Enter дарж дараагийн талбар луу шилжих ----------
+    function setupInputNavigation() {
+      const inputs = document.querySelectorAll('.tabable-input, .horseWeight');
+      inputs.forEach(input => {
+        input.removeEventListener('keydown', handleInputEnter);
+        input.addEventListener('keydown', handleInputEnter);
+      });
+    }
+
+    function handleInputEnter(e) {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+
+      // Эхлээд үнийн талбаруудыг шинэчилнэ, тэгэхгүй бол шинээр гарах талбарыг алгасна
+      if (e.target.classList.contains('horseWeight')) updateCategoryView();
+
+      // Зөвхөн харагдаж байгаа талбаруудаар шилжинэ
+      const inputs = Array.from(document.querySelectorAll('.tabable-input, .horseWeight'))
+        .filter(el => el.offsetParent !== null);
+      const currentIndex = inputs.indexOf(e.target);
+
+      if (currentIndex > -1 && currentIndex < inputs.length - 1) {
+        inputs[currentIndex + 1].focus();
+      } else {
+        document.getElementById('calculateBtn').focus();
+      }
+    }
+
+    document.addEventListener("DOMContentLoaded", function () {
+      ['date', 'herder', 'account', 'phone', 'horseCount'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('input', validateForm);
+      });
+      setupInputNavigation();
+    });
+
+    // ---------- Жингийн талбарууд ----------
+    function generateWeightFields() {
+      const count = parseInt(document.getElementById('horseCount').value);
+      const container = document.getElementById('weightFields');
+      container.innerHTML = '';
+      if (isNaN(count) || count <= 0) {
+        updateCategoryView();
+        return;
+      }
+
+      for (let i = 0; i < count; i++) {
+        const input = document.createElement('input');
+        input.type = 'number';
+        input.placeholder = `${i + 1}-р адууны жин (кг)`;
+        input.className = 'horseWeight';
+        input.onchange = updateCategoryView;
+        input.oninput = validateForm;
+        container.appendChild(input);
+      }
+
+      updateCategoryView();
+      setupInputNavigation();
+
+      const firstWeightInput = document.querySelector('.horseWeight');
+      if (firstWeightInput) firstWeightInput.focus();
+    }
+
+    // ---------- Баримт ----------
+    function collectData() {
+      const weights = getWeights();
+      const groups = groupWeights(weights).map(g => {
+        const priceEl = document.getElementById(`price-${g.cat.key}`);
+        const price = priceEl ? (parseFloat(priceEl.value) || 0) : 0;
+        return { ...g, price, sum: g.total * price };
+      });
+
+      return {
+        receiptId: `REG-${Date.now()}`,
+        date: document.getElementById('date').value,
+        herder: document.getElementById('herder').value,
+        account: document.getElementById('account').value,
+        phone: document.getElementById('phone').value,
+        weights,
+        groups,
+        totalWeight: groups.reduce((a, g) => a + g.total, 0),
+        totalSum: groups.reduce((a, g) => a + g.sum, 0)
+      };
+    }
+
+    function receiptHtml(d, copyLabel, qrId) {
+      const countLines = d.groups.map(g =>
+        `<p><strong>${g.cat.name}:</strong> ${g.total.toFixed(2)} кг (${g.count} ширхэг)</p>`
+      ).join('');
+
+      const priceLines = d.groups.map(g =>
+        `<p><strong>${g.cat.name} үнэ:</strong> ${g.total.toFixed(2)} кг × ${g.price} ₮ = <span class="nowrap">${g.sum.toLocaleString()} ₮</span></p>`
+      ).join('');
+
+      return `
+        <div class="receipt">
+          <div class="title-area">
+            <strong>Эмээлт Эрдэнэ Трейд ХХК</strong><br>
+            <span class="subtitle">Холбогдох утас: 94020230, 89028230</span><br>
+            <span><em>${copyLabel}</em></span>
+          </div>
+          <p><strong>Бүртгэлийн дугаар:</strong> ${d.receiptId}</p>
+          <p><strong>Огноо:</strong> ${d.date}</p>
+          <p><strong>Малчны нэр:</strong> ${d.herder}</p>
+          <p><strong>Дансны дугаар:</strong> ${d.account}</p>
+          <p><strong>Утасны дугаар:</strong> ${d.phone}</p>
+          <p><strong>Адууны тоо:</strong> ${d.weights.length}</p>
+          <p><strong>Адууны жингүүд:</strong> ${d.weights.join(', ')} кг</p>
+          ${countLines}
+          ${priceLines}
+          <p><strong>Нийт жин:</strong> ${d.totalWeight.toFixed(2)} кг</p>
+          <p><strong>Нийт дүн:</strong> <span class="nowrap">${d.totalSum.toLocaleString()} ₮</span></p>
+          <br>
+          <p><strong>Малчин гарын үсэг: ______________________</strong></p>
+          <p><strong>Ажилтны нэр:</strong> Э.Энхцэцэг</p>
+          <div id="${qrId}"></div>
+        </div>`;
+    }
+
+    function generateReceipt() {
+      const d = collectData();
+      const qr1 = `qrcode-${d.receiptId}-1`;
+      const qr2 = `qrcode-${d.receiptId}-2`;
+      const qrData = `Малчин: ${d.herder}, Огноо: ${d.date}, Дугаар: ${d.receiptId}`;
+
+      const area = document.getElementById('resultArea');
+      area.innerHTML = `<div class="print-container">
+        ${receiptHtml(d, "Малчинд олгох", qr1)}
+        ${receiptHtml(d, "Компанид үлдэх", qr2)}
+      </div>`;
+      area.style.display = 'block';
+
+      QRCode.toCanvas(document.getElementById(qr1), qrData);
+      QRCode.toCanvas(document.getElementById(qr2), qrData);
+
+      // Google Sheet руу илгээх
+      const priceOf = key => {
+        const g = d.groups.find(x => x.cat.key === key);
+        return g && g.count > 0 ? g.price : '';
+      };
+
+      fetch(SCRIPT_URL, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          receiptId: d.receiptId,
+          date: d.date,
+          herder: d.herder,
+          account: d.account,
+          phone: d.phone,
+          horseCount: d.weights.length,
+          weights: d.weights,
+          mode: `${currentMode} ангилал`,
+          priceUnder100: priceOf('under'),
+          priceOver100: priceOf('over'),       // зөвхөн 2 ангилалд
+          price101to160: priceOf('mid'),       // зөвхөн 3 ангилалд
+          priceOver160: priceOf('over160'),    // зөвхөн 3 ангилалд
+          totalWeight: d.totalWeight.toFixed(2),
+          totalSum: d.totalSum.toFixed(2)
+        })
+      });
+    }
+
+    // ---------- Арилгах / шалгах ----------
+    function resetForm() {
+      document.querySelectorAll("#mainForm input").forEach(input => input.value = '');
+      document.getElementById('date').value = todayStr();
+      document.getElementById('weightFields').innerHTML = '';
+      document.querySelectorAll('#priceFields > div').forEach(w => w.style.display = 'none');
+      document.getElementById('resultArea').style.display = 'none';
+      document.getElementById('resultArea').innerHTML = '';
+      document.getElementById('calculateBtn').disabled = true;
+      document.getElementById('weightStats').innerText = '';
+      setupInputNavigation();
+    }
+
+    function validateForm() {
+      const required = ['date', 'herder', 'account', 'phone', 'horseCount'];
+      let isValid = required.every(id => {
+        const el = document.getElementById(id);
+        return el && el.value.trim() !== '';
+      });
+
+      const weightInputs = document.querySelectorAll('.horseWeight');
+      if (weightInputs.length === 0 || Array.from(weightInputs).some(i => !i.value.trim())) {
+        isValid = false;
+      }
+
+      // Адуу байгаа ангилал бүрийн үнэ заавал бөглөгдсөн байх ёстой
+      groupWeights(getWeights()).forEach(g => {
+        if (g.count > 0) {
+          const p = document.getElementById(`price-${g.cat.key}`);
+          if (!p || !p.value.trim()) isValid = false;
+        }
+      });
+
+      document.getElementById('calculateBtn').disabled = !isValid;
+    }
+  </script>
+</body>
+</html>
